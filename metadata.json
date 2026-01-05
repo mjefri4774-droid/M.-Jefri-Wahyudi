@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Copy of Copy of Sistem Absensi SMP Digital (RFID)",
+  "description": "A comprehensive student attendance management system for Junior High Schools, featuring virtual RFID simulation, real-time dashboards, and AI-powered attendance insights using Gemini.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

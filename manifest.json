@@ -1,0 +1,22 @@
+
+{
+  "name": "Sistem Absensi SMP Digital",
+  "short_name": "AbsensiSMP",
+  "description": "Sistem Absensi RFID SMP Digital dengan kemampuan Offline",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#064e3b",
+  "theme_color": "#064e3b",
+  "icons": [
+    {
+      "src": "https://ui-avatars.com/api/?name=SMP&background=059669&color=fff&size=192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://ui-avatars.com/api/?name=SMP&background=059669&color=fff&size=512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
