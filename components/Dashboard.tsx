@@ -11,7 +11,6 @@ interface DashboardProps {
   school: SchoolProfile;
 }
 
-// Helper to get consistent local date string YYYY-MM-DD
 const getLocalDateString = (date: Date = new Date()) => {
   const offset = date.getTimezoneOffset();
   const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
@@ -56,6 +55,29 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, school }) =
     };
   }, [students, todayAttendance]);
 
+  const chartData = useMemo(() => {
+    const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum'];
+    const now = new Date();
+    const currentDayIdx = now.getDay(); // 0 is Sunday, 1 is Monday...
+
+    return days.map((dayName, idx) => {
+      // Find the date for this day in the current week
+      const targetDate = new Date(now);
+      const diff = (idx + 1) - currentDayIdx;
+      targetDate.setDate(now.getDate() + diff);
+      const dateStr = getLocalDateString(targetDate);
+
+      const dayAttendance = attendance.filter(a => a.timestamp.startsWith(dateStr));
+      const uniqueStudents = new Set(dayAttendance.map(a => a.studentId));
+      
+      return {
+        name: dayName,
+        count: uniqueStudents.size,
+        date: dateStr
+      };
+    });
+  }, [attendance]);
+
   const sendGroupWARecap = () => {
     const dateStr = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     
@@ -92,14 +114,6 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, school }) =
     { name: 'HADIR', value: stats.present, color: '#10b981' },
     { name: 'TIDAK HADIR', value: stats.absent, color: '#f43f5e' },
   ], [stats]);
-
-  const chartData = useMemo(() => {
-    const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum'];
-    return days.map(day => ({
-      name: day,
-      count: Math.floor(Math.random() * students.length) + (students.length * 0.3)
-    }));
-  }, [students]);
 
   useEffect(() => {
     const fetchAnalysis = async () => {
@@ -255,21 +269,22 @@ const Dashboard: React.FC<DashboardProps> = ({ students, attendance, school }) =
 
         <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-7 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="font-bold text-lg text-slate-800">Tren Kehadiran Siswa</h3>
+            <h3 className="font-bold text-lg text-slate-800">Tren Kehadiran Siswa (Minggu Ini)</h3>
           </div>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} domain={[0, students.length + 2]} />
                 <Tooltip 
                   cursor={{ fill: '#f0fdf4', radius: 12 }}
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
+                  formatter={(value: any) => [`${value} Siswa`, 'Hadir']}
                 />
                 <Bar dataKey="count" radius={[10, 10, 0, 0]}>
                   {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 4 ? '#059669' : '#d1fae5'} />
+                    <Cell key={`cell-${index}`} fill={entry.date === todayStr ? '#059669' : '#d1fae5'} />
                   ))}
                 </Bar>
               </BarChart>

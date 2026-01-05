@@ -17,7 +17,6 @@ interface ReportsProps {
 
 type PeriodType = 'harian' | 'mingguan' | 'bulanan' | 'tahunan';
 
-// Helper to get consistent local date string YYYY-MM-DD
 const getLocalDateString = (date: Date = new Date()) => {
   const offset = date.getTimezoneOffset();
   const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
@@ -36,12 +35,13 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
   const getPeriodDisplay = () => {
     switch(period) {
       case 'harian': return currentDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-      case 'mingguan':
+      case 'mingguan': {
         const start = new Date(currentDate);
         start.setDate(currentDate.getDate() - currentDate.getDay());
         const end = new Date(start);
         end.setDate(start.getDate() + 6);
         return `${start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      }
       case 'bulanan': return currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
       case 'tahunan': return currentDate.getFullYear().toString();
       default: return '';
@@ -67,13 +67,14 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
     } else if (period === 'mingguan') {
       start.setDate(currentDate.getDate() - currentDate.getDay());
       start.setHours(0,0,0,0);
+      end = new Date(start);
       end.setDate(start.getDate() + 6);
       end.setHours(23,59,59,999);
     } else if (period === 'bulanan') {
-      start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1, 0, 0, 0);
       end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
     } else if (period === 'tahunan') {
-      start = new Date(currentDate.getFullYear(), 0, 1);
+      start = new Date(currentDate.getFullYear(), 0, 1, 0, 0, 0);
       end = new Date(currentDate.getFullYear(), 11, 31, 23, 59, 59);
     }
 
@@ -85,12 +86,10 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
 
   const datesInRange = useMemo(() => {
     const dates: string[] = [];
-    let start = new Date(currentDate);
-    let end = new Date(currentDate);
-
     if (period === 'harian') {
       dates.push(getLocalDateString(currentDate));
     } else if (period === 'mingguan') {
+      const start = new Date(currentDate);
       start.setDate(currentDate.getDate() - currentDate.getDay());
       for (let i = 0; i < 7; i++) {
         const d = new Date(start);
@@ -114,14 +113,12 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
 
     datesInRange.forEach(dateStr => {
       const dayAttendance = filteredAttendance.filter(a => a.timestamp.startsWith(dateStr));
-      students.forEach(student => {
-        const isPresent = dayAttendance.some(a => a.studentId === student.id);
-        if (isPresent) hadirTotal++;
-        else alpaTotal++;
-      });
+      const presentIds = new Set(dayAttendance.map(a => a.studentId));
+      hadirTotal += presentIds.size;
+      alpaTotal += (students.length - presentIds.size);
     });
 
-    return { hadir: hadirTotal, alpa: alpaTotal, totalChecks: hadirTotal + alpaTotal };
+    return { hadir: hadirTotal, alpa: alpaTotal, totalChecks: datesInRange.length * students.length };
   }, [datesInRange, filteredAttendance, students]);
 
   const pieData = useMemo(() => [
@@ -134,9 +131,8 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
       const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
       return days.map((day, idx) => {
         const dateStr = datesInRange[idx];
-        const hadirCount = students.filter(student => 
-          filteredAttendance.some(r => r.studentId === student.id && r.timestamp.startsWith(dateStr))
-        ).length;
+        const dayAtt = filteredAttendance.filter(a => a.timestamp.startsWith(dateStr));
+        const hadirCount = new Set(dayAtt.map(a => a.studentId)).size;
         return { name: day, Kehadiran: hadirCount, Kapasitas: students.length };
       });
     }
@@ -147,20 +143,9 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
 
   const handleExportExcel = () => {
     setIsExporting(true);
-    
     setTimeout(() => {
       try {
         const dataForExcel: any[] = [];
-        
-        // Generate Header Row with dates
-        const header = ["No", "Nama Siswa", "NISN", "Kelas"];
-        datesInRange.forEach(date => {
-          header.push(date.split('-').slice(2).join('/') + '/' + date.split('-')[1]);
-        });
-        header.push("Total Hadir");
-        header.push("% Kehadiran");
-
-        // Generate Rows for each student
         students.forEach((student, index) => {
           const row: any = {
             "No": index + 1,
@@ -172,7 +157,8 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
           let studentHadirCount = 0;
           datesInRange.forEach(dateStr => {
             const isPresent = filteredAttendance.some(a => a.studentId === student.id && a.timestamp.startsWith(dateStr));
-            row[dateStr.split('-').slice(2).join('/') + '/' + dateStr.split('-')[1]] = isPresent ? "HADIR" : "ALPA";
+            const colName = dateStr.split('-').reverse().join('/');
+            row[colName] = isPresent ? "HADIR" : "ALPA";
             if (isPresent) studentHadirCount++;
           });
 
@@ -184,8 +170,7 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Presensi");
-        
-        const fileName = `Rekap_Presensi_${period.toUpperCase()}_${getPeriodDisplay().replace(/ /g, '_')}.xlsx`;
+        const fileName = `Rekap_Absensi_${period.toUpperCase()}_${getPeriodDisplay().replace(/ /g, '_')}.xlsx`;
         XLSX.writeFile(workbook, fileName);
       } catch (err) {
         console.error("Export error:", err);
@@ -273,6 +258,7 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
                   <Tooltip 
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
                     itemStyle={{ fontWeight: 'bold' }}
+                    formatter={(value: any) => [`${value} Siswa`, 'Hadir']}
                   />
                   <Area type="monotone" dataKey="Kehadiran" stroke="#059669" strokeWidth={4} fillOpacity={1} fill="url(#colorKehadiran)" />
                 </AreaChart>
@@ -350,7 +336,7 @@ const Reports: React.FC<ReportsProps> = ({ students, attendance, userRole = 'use
                    <span className="text-xs font-bold">{students.length} Siswa</span>
                 </div>
                 <div className="flex justify-between items-center py-3">
-                   <span className="text-xs text-slate-400 font-medium">Rata-rata Kehadiran</span>
+                   <span className="text-xs text-slate-400 font-medium">Persentase Kehadiran</span>
                    <span className="text-xs font-bold text-emerald-400">{stats.totalChecks > 0 ? ((stats.hadir / stats.totalChecks) * 100).toFixed(1) : 0}%</span>
                 </div>
              </div>
